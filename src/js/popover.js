@@ -16,6 +16,20 @@ const MARGIN = 12;    // 距视口边缘的最小留白
 
 const onCloseMap = new WeakMap();
 
+/** 浮层 → 它的触发器。关的时候要拿它把 aria-expanded 复位 */
+const anchorMap = new WeakMap();
+
+/**
+ * 触发器上的 aria-expanded 必须成对写：开时 true、关时 false。
+ * CSS 就是靠它转箭头的（`.search__engine[aria-expanded="true"] .search__chev`），
+ * 只置 true 不复位的话，箭头打开过一次就永远朝上 —— 真实踩过这个坑。
+ * 只动声明了 aria-haspopup 的元素：磁贴那种普通按钮不该带 aria-expanded。
+ */
+function setExpanded(anchor, on) {
+  if (!anchor?.hasAttribute('aria-haspopup')) return;
+  anchor.setAttribute('aria-expanded', String(on));
+}
+
 /** 抬升高度：要盖过所有兄弟组件（它们都是 1），又不至于压住辅助线和工具条 */
 const RAISED = 20;
 
@@ -86,7 +100,8 @@ export function openPopover(el, { anchor, prefer = 'below-start', onClose } = {}
   place(el, anchor ?? el, prefer);
   raiseHost(el, true);
 
-  anchor?.setAttribute('aria-expanded', 'true');
+  anchorMap.set(el, anchor);
+  setExpanded(anchor, true);
   onCloseMap.set(el, onClose);
 
   pushLayer({
@@ -105,6 +120,10 @@ export function closePopover(el) {
   el.style.removeProperty('top');
   raiseHost(el, false);
   popLayer(el.id);
+
+  const anchor = anchorMap.get(el);
+  anchorMap.delete(el);
+  setExpanded(anchor, false);
 
   const onClose = onCloseMap.get(el);
   onCloseMap.delete(el);

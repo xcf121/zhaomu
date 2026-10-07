@@ -41,6 +41,7 @@ export function initSearch(cfg) {
   const engineBtn = document.getElementById('engineBtn');
   const engineName = document.getElementById('engineName');
   const hint = document.getElementById('searchHint');
+  const clearBtn = document.getElementById('searchClear');
   const menu = document.getElementById('engineMenu');
 
   let engines = cfg.search.engines;
@@ -115,15 +116,35 @@ export function initSearch(cfg) {
       input.select();
     }
     if (event.key === 'Escape' && typing && !anyOpen()) {
-      input.value = '';
+      clear();
     }
   });
 
   hint.addEventListener('click', () => input.focus());
 
+  /* 清空键：聚焦且有内容时才出现（没聚焦时那个位置留给 / 提示）。
+   * Escape 清空和它走同一个 clear()，两处状态不会走岔。 */
+  function syncDirty() {
+    form.classList.toggle('is-dirty', input.value !== '');
+  }
+
+  function clear() {
+    input.value = '';
+    syncDirty();
+  }
+
+  // 按下时就拦掉默认行为，别把焦点从输入框抢走 —— 否则点一下清空，光标就掉出去了
+  clearBtn.addEventListener('mousedown', (event) => event.preventDefault());
+  clearBtn.addEventListener('click', () => {
+    clear();
+    input.focus();
+  });
+  input.addEventListener('input', syncDirty);
+  syncDirty();
+
   // 从搜索结果返回时清空上一次的输入，避免「怎么还留着刚才的词」
   window.addEventListener('pageshow', (event) => {
-    if (event.persisted) input.value = '';
+    if (event.persisted) clear();
   });
 
   // 引擎在别处被改了（设置面板、导入配置）就跟着换，下拉的勾选也才跟得上

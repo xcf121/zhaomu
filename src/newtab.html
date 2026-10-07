@@ -46,7 +46,16 @@
                  placeholder="搜索，或输入网址" spellcheck="false"
                  autocomplete="off" autocapitalize="off" autocorrect="off"
                  aria-label="搜索关键词或网址">
-          <kbd class="search__hint" id="searchHint" aria-hidden="true">/</kbd>
+          <div class="search__tail">
+            <button class="search__clear" id="searchClear" type="button"
+                    aria-label="清空" title="清空（Esc）">
+              <svg viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3 3 9 9M9 3 3 9" fill="none" stroke="currentColor"
+                      stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <kbd class="search__hint" id="searchHint" aria-hidden="true">/</kbd>
+          </div>
         </form>
 
         <div class="popover glass" id="engineMenu" role="listbox" aria-label="选择搜索引擎"></div>

@@ -26,12 +26,18 @@ src/                  ← 扩展根目录，Chrome「加载已解压的扩展程
   js/sync.js          云同步：只预留契约，**未实现**
   js/wallpaper.js     壁纸：Bing 每日一图 / 用户上传 / 不用（按天缓存 + 两层交叉淡入）
   js/clock.js         时钟 / 日期 / 问候语
-  js/search.js        搜索框：引擎下拉 + 网址直跳
-  js/shortcuts.js     快捷方式网格 + 增删改排序 + 右键编辑 + 图标上传
+  js/search.js        搜索框：引擎下拉 + 网址直跳（两者都开新标签页）
+  js/shortcuts.js     快捷方式网格 + 增删改排序 + 右键编辑 + 图标上传（点击开新标签页）
   js/weather.js       天气卡片 + 城市搜索 + WMO 天气码图标
   js/main.js          入口，装配各模块
+  icons/              扩展图标 16/32/48/128，由 tools/make-icons.py 生成，manifest 里引用
 docs/TASKS.md         里程碑与任务
 PROJECT.md            目标 / MVP / 关键决策
+CHANGELOG.md          更新日志（一个版本一节）
+tools/make-icons.py   扩展图标生成脚本：**纯标准库手写 PNG**（zlib + struct），不引 Pillow
+tools/package.py      打包脚本：按 manifest 版本号打 dist/zhaomu-v<版本>.zip，manifest 在根
+dist/                 打包产物，**不进版本库**（已 gitignore），发布时传到 GitHub Release
+.preview/             测试壳页与截图的临时目录，**跑完即删**（已 gitignore）
 ```
 
 ## 命令
@@ -45,6 +51,19 @@ PROJECT.md            目标 / MVP / 关键决策
 python -m http.server 8777 --directory src
 # 然后开 http://127.0.0.1:8777/newtab.html
 ```
+
+改扩展图标（`src/icons/` 里那四张，改了重跑即可）：
+
+```
+python tools/make-icons.py
+```
+
+打包发布（版本号只从 `src/manifest.json` 读，产物在 `dist/`）：
+
+```
+python tools/package.py
+```
+
 注意：**不能直接双击 `newtab.html`**。ES 模块在 `file://` 下会被 CORS 拦死，
 `chrome.storage` 也不存在，脚本整个不执行。（已实测确认）
 
@@ -75,6 +94,10 @@ python -m http.server 8777 --directory src
   这个栈的 keydown 挂在**捕获阶段**，所以能真正拦掉后面所有冒泡监听。
 - **「模式」和「浮层」要分开**：编辑模式注册时带 `sticky: true`，它不参与 `closeAll()`、
   也不响应点外部关闭。少了这条，点「+」开个表单就会把编辑模式一起关掉（真实踩过）。
+- **写在触发器上的状态必须成对**：`popover.js` 会给触发器设 `aria-expanded`，CSS 拿它转箭头
+  （`.search__engine[aria-expanded="true"] .search__chev`）。开的时候置了 `true`、
+  关的时候忘了复位，箭头就打开过一次永远朝上 —— 真实踩过。凡是在同一个元素上「开时写、
+  关时不写」的状态（属性、类名）都要按这条查一遍。
 - **虚线框用 `outline` 不用 `border`**：border 会改变 `offsetWidth/offsetHeight`，
   按百分比重算位置时组件会跳一下，还会把拖拽缓存的尺寸搞错。
 - **WAAPI 的 `el.animate()` 不受 CSS 的 `prefers-reduced-motion` 全局规则约束**，
@@ -153,14 +176,19 @@ python -m http.server 8777 --directory src
 
 ## 当前状态
 
-M1–M5 已完成。M5 交付（图标与壁纸）：
+**v1.0.0 已发布**（2026-10-07）。M1–M5 已完成。M5 交付（图标与壁纸）：
 
-- **图标联网获取** —— 本地缓存里没有就去站点自己那里取：先 `/favicon.ico`，
-  不成就抓首页 HTML 认 `<link rel=icon>`。带超时与正/负缓存，四秒拿不到就先用首字母色块
+- **图标联网获取** —— 本地缓存里没有就按 Cravatar → 0x3 → 站点 `/favicon.ico` →
+  抓首页 HTML 认 `<link rel=icon>` 依次试。带超时与三级缓存，四秒拿不到就先用首字母色块
 - **右键编辑磁贴** —— 改名字、改网址、上传本地图片当图标、删除。任何时候可用，不必先进编辑模式
 - **「+」磁贴修好了** —— 以前那个分支写在 `editing` 判断后面，平时点它毫无反应
 - **自定义壁纸** —— 设置里上传本地图片（压到长边 2560px 存进配置），可随时移除换回 Bing
 - **排序拖拽修好了** —— 拖动时磁贴会飘走、Esc 退出编辑态后磁贴还在跟着鼠标走，两个 bug 都修了
+- **点击一律开新标签页** —— 磁贴走 `target=_blank` + `rel=noopener`，搜索与网址直跳走
+  `window.open(..., '_blank', 'noopener')`。起始页是张一次性的空白页，占着它没意义，
+  留在原地还能从结果页回来接着改词重搜
+- **扩展图标** —— `tools/make-icons.py` 生成 16/32/48/128：圆角方块铺页面那层兜底渐变，
+  上面一轮白朝阳压着地平线。改图标就改脚本里的形状参数再跑一次
 
 M4 交付：
 
@@ -190,5 +218,7 @@ M4 交付：
 - 右键菜单的手感、上传图标 / 壁纸时选文件的流程、自定义壁纸在大屏上的清晰度
 
 （无头 Chrome 加载不了扩展，Chrome 137+ 收紧了 `--load-extension`。）
+
+1.0.0 的打包与发布流程见 [README.md](README.md) 的「更新与回退」和 `tools/package.py`。
 
 下一步：M6 打磨（键盘快捷键、入场动效、分辨率适配与离线演练）。详见 `docs/TASKS.md`。

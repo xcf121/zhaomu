@@ -264,9 +264,17 @@ body.is-booting .stage { transform: translateY(10px); }
 }
 .search__input::placeholder { color: var(--text-faint); }
 
-.search__hint {
+/* 尾巴上的固定槽位：清空键和 / 提示叠在同一格里，互换时不会推动左边的输入框 */
+.search__tail {
   flex: none;
-  margin-right: 14px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  margin-right: 12px;
+}
+.search__tail > * { grid-area: 1 / 1; }
+
+.search__hint {
   padding: 2px 7px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 6px;
@@ -274,9 +282,35 @@ body.is-booting .stage { transform: translateY(10px); }
   font-size: 11px;
   line-height: 1.5;
   color: var(--text-faint);
-  transition: opacity 180ms var(--ease);
+  transition: opacity 180ms var(--ease), visibility 180ms var(--ease);
 }
-.search:focus-within .search__hint { opacity: 0; }
+
+.search__clear {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms var(--ease), visibility 180ms var(--ease),
+              background 160ms var(--ease), color 160ms var(--ease);
+}
+.search__clear svg { width: 11px; height: 11px; }
+.search__clear:hover { background: var(--glass-bg-hover); color: var(--text); }
+
+/*
+ * 两者互斥：没聚焦时那个位置是 / 提示，聚焦且有内容时换成清空键。
+ * 用 visibility 而不是 display 或 hidden 属性 —— 藏起来时既点不到也 Tab 不到，
+ * 又能留在同一格槽位里做淡入淡出。
+ */
+.search:focus-within .search__hint { opacity: 0; visibility: hidden; }
+.search:focus-within.is-dirty .search__clear { opacity: 1; visibility: visible; }
 
 /* ---------- 快捷方式 ---------- */
 

@@ -3,6 +3,9 @@
 __pycache__/
 *.pyc
 
+# 打包产物（发布时传到 GitHub Release，不进版本库）
+dist/
+
 # 系统文件
 Thumbs.db
 Desktop.ini
