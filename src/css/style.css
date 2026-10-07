@@ -1,0 +1,1097 @@
+/* ============================================================
+   起始页 · 样式
+   基调：全屏壁纸 + 深色蒙版保对比度 + 半透明毛玻璃承载功能区
+   ============================================================ */
+
+:root {
+  /* 毛玻璃 */
+  --glass-bg:        rgba(255, 255, 255, 0.13);
+  --glass-bg-hover:  rgba(255, 255, 255, 0.16);
+  --glass-bg-focus:  rgba(255, 255, 255, 0.14);
+  --glass-border:    rgba(255, 255, 255, 0.22);
+  --glass-border-hi: rgba(255, 255, 255, 0.34);
+  --glass-blur:      20px;
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --glass-shadow:    0 8px 32px rgba(0, 0, 0, 0.28), var(--glass-highlight);
+
+  /* 文字（浮在壁纸上，全部带阴影保证任何底色下都能读） */
+  --text:        #ffffff;
+  --text-dim:    rgba(255, 255, 255, 0.80);
+  --text-faint:  rgba(255, 255, 255, 0.52);
+  --text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
+
+  --radius-sm: 10px;
+  --radius-md: 13px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  /* 动效时长。收敛成三档，不再散落 140/160/180/200/260 */
+  --dur-1: 140ms;
+  --dur-2: 180ms;
+  --dur-3: 260ms;
+
+  --outline: 2px solid rgba(255, 255, 255, 0.70);
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  /* 层级。收敛成 token，不再散落魔法数字。
+     设置模态走 <dialog> 的 top layer，不参与这套。 */
+  --z-bg: 0;
+  --z-scrim: 1;
+  --z-stage: 2;
+  --z-widget: 1;
+  --z-guides: 30;
+  --z-bar: 50;
+
+  --font: system-ui, -apple-system, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+
+  /* 壁纸没加载出来时的兜底渐变，同时避免加载瞬间白闪 */
+  background:
+    radial-gradient(1200px 820px at 16% 6%,  #3d4d75 0%, transparent 64%),
+    radial-gradient(1050px 760px at 88% 90%, #573f66 0%, transparent 64%),
+    radial-gradient(900px 700px at 62% 45%,  #2b3654 0%, transparent 70%),
+    linear-gradient(160deg, #1a2133 0%, #212a3d 54%, #171d2b 100%);
+  background-attachment: fixed;
+}
+
+/* ---------- 背景层 ---------- */
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-color: transparent;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 900ms var(--ease);
+  will-change: opacity;
+}
+.bg.is-ready { opacity: 1; }
+
+/* 压暗蒙版：上下加重、中心留亮，既保文字对比度又不压死画面。
+   只在壁纸真正上屏后才启用 —— 没壁纸时底下是深色渐变，再压一层就什么都看不见了。 */
+.bg-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 900ms var(--ease);
+  background:
+    radial-gradient(120% 85% at 50% 0%, rgba(0, 0, 0, 0.40), transparent 62%),
+    linear-gradient(180deg,
+      rgba(0, 0, 0, 0.30) 0%,
+      rgba(0, 0, 0, 0.06) 32%,
+      rgba(0, 0, 0, 0.52) 100%);
+}
+
+body.has-wallpaper .bg-scrim { opacity: 1; }
+
+/* ---------- 主体布局 ---------- */
+
+/* 组件定位容器。inset 的 16px 22px 让 x=0 / y=0 正好落在原来版权、天气卡片的内缩位置上。
+   ⚠️ .stage 上有 transform（入场动画），它会成为组件内浮层的包含块 ——
+   所以组件里的浮层一律 position: absolute，绝不能用 fixed。 */
+.stage {
+  position: fixed;
+  inset: 16px 22px;
+  z-index: var(--z-stage);
+  transition: transform 700ms var(--ease);
+}
+
+/* 首帧前不显示，避免时钟、搜索框、磁贴逐个跳出来的闪烁。
+   ⚠️ 这里**只能动 transform，绝不能动 opacity**：
+   祖先元素只要 opacity < 1 就会形成 backdrop root，毛玻璃就只模糊到那一层为止。
+   实测（对照表）淡入的 700ms 里 backdrop-filter 全程不生效，
+   要等淡入结束、opacity 精确等于 1 的那一帧才「啪」地一下变糊 ——
+   表现就是「先是透明玻璃，然后才变成毛玻璃」。
+   transform 不在 backdrop root 的触发条件里，所以可以放心用。 */
+body.is-booting .stage { transform: translateY(10px); }
+
+/* ---------- 组件 ---------- */
+
+/*
+ * 位置换算全在这两条声明里，JS 只往元素上写 --x / --y 两个纯数字。
+ *
+ *   left      的百分比相对**容器宽**
+ *   translate 的百分比相对**自身宽**
+ *   两者相减 = x/100 × (容器宽 − 自身宽)
+ *
+ * 于是 0 = 贴起始边、50 = 精确居中、100 = 贴结束边，
+ * 而且任何窗口尺寸下都不可能跑到屏幕外（不需要额外的边界兜底），
+ * 窗口缩放时 JS 一行都不用跑。
+ *
+ * ⚠️ 绝对不要给 .widget 加 transition —— 拖拽跟手会变成拖影。
+ */
+.widget {
+  position: absolute;
+  left: calc(var(--x, 50) * 1%);
+  top: calc(var(--y, 50) * 1%);
+  transform: translate(calc(var(--x, 50) * -1%), calc(var(--y, 50) * -1%));
+  z-index: calc(var(--z-widget) + var(--wz, 0));
+}
+
+.widget[data-hidden="1"] { display: none; }
+
+/* 组件宽度必须写在这里：.widget 是绝对定位、宽度靠 shrink-to-fit，
+   组件本体再用 100% 就会循环依赖。
+   快捷方式给到 740px 是为了让 8 个种子站点 + 末尾的「+」磁贴排成一行
+   （每列 76+6=82px，9 列需要 732px）。更窄时会折行、组件变高 ——
+   实测到 480px 宽仍不重叠，再窄就可能压到搜索框（已知退化）。 */
+.widget[data-widget="clock"]     { width: max-content; }
+.widget[data-widget="search"]    { width: min(640px, calc(100vw - 44px)); }
+.widget[data-widget="shortcuts"] { width: min(740px, calc(100vw - 44px)); }
+.widget[data-widget="weather"]   { width: max-content; }
+.widget[data-widget="credit"]    { max-width: min(52vw, 720px); }
+
+/* ---------- 时钟 ---------- */
+
+.clock { text-align: center; }
+
+.clock__time {
+  font-size: clamp(62px, 11vw, 128px);
+  font-weight: 200;
+  line-height: 0.94;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;   /* 数字等宽，跳秒时不左右抖 */
+  font-feature-settings: "tnum" 1;
+  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+}
+
+.clock__meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: clamp(10px, 1.6vh, 18px);
+  font-size: clamp(13px, 1.3vw, 16px);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  text-shadow: var(--text-shadow);
+  min-height: 1.4em;   /* 占位，避免时间初始化后布局跳一下 */
+}
+
+.clock__sep { color: var(--text-faint); }
+
+/* ---------- 毛玻璃基底 ---------- */
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+}
+
+/* ---------- 搜索框 ---------- */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 56px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  transition: background 200ms var(--ease),
+              border-color 200ms var(--ease),
+              box-shadow 200ms var(--ease),
+              width 260ms var(--ease);
+}
+
+.search:focus-within {
+  background: var(--glass-bg-focus);
+  border-color: var(--glass-border-hi);
+  box-shadow: var(--glass-shadow), 0 0 0 4px rgba(255, 255, 255, 0.07);
+}
+
+.search__engine {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 40px;
+  padding: 0 11px 0 15px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 160ms var(--ease), color 160ms var(--ease);
+}
+.search__engine:hover { background: var(--glass-bg-hover); color: var(--text); }
+
+.search__chev {
+  width: 11px;
+  height: 11px;
+  opacity: 0.6;
+  flex: none;
+  transition: transform 180ms var(--ease);
+}
+/* 下拉打开时箭头翻过来，让「展开中」这件事在触发器上也能看到 */
+.search__engine[aria-expanded="true"] .search__chev { transform: rotate(180deg); }
+
+.search__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: clamp(15px, 1.5vw, 16.5px);
+  outline: none;
+}
+.search__input::placeholder { color: var(--text-faint); }
+
+.search__hint {
+  flex: none;
+  margin-right: 14px;
+  padding: 2px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-faint);
+  transition: opacity 180ms var(--ease);
+}
+.search:focus-within .search__hint { opacity: 0; }
+
+/* ---------- 快捷方式 ---------- */
+
+.shortcuts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 76px);
+  justify-content: center;
+  gap: 8px 6px;
+  width: 100%;
+}
+.shortcuts:empty { display: none; }
+
+.tile {
+  position: relative;      /* 删除徽标要挂在这上面 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 76px;
+  padding: 10px 4px 8px;
+  border-radius: 16px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 180ms var(--ease), transform 180ms var(--ease);
+}
+.tile:hover  { background: rgba(255, 255, 255, 0.12); transform: translateY(-2px); }
+.tile:active { transform: translateY(0) scale(0.97); }
+/* 焦点态见下面的共享规则 */
+
+/* 图标框：小号毛玻璃方块，与搜索框同一套材质语言 */
+.tile__icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  overflow: hidden;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.20);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+}
+
+/* 首字母兜底：拿不到 favicon 时显示，色相由名称哈希决定，同一个站点颜色始终一致 */
+.tile__letter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  font-weight: 600;
+  color: #fff;
+  background: hsla(var(--hue, 220), 60%, 62%, 0.42);
+  transition: opacity 200ms var(--ease);
+}
+
+.tile__img {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 200ms var(--ease);
+}
+
+/* 图标真正加载成功了才把它显出来，否则一直显示首字母 */
+.tile__icon.has-icon .tile__letter { opacity: 0; }
+.tile__icon.has-icon .tile__img    { opacity: 1; }
+
+.tile__name {
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.94);
+  /* 双层阴影：紧的一层勾边保证字形边界，散的一层压住背景噪点。
+     单层模糊阴影在花哨壁纸上是读不出来的。 */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), 0 1px 12px rgba(0, 0, 0, 0.72);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 160ms var(--ease);
+}
+.tile:hover .tile__name { color: var(--text); }
+
+/* ---------- 快捷方式：添加 / 删除 / 排序 ---------- */
+
+/* 「+」磁贴常驻（添加是常用动作，不该藏在编辑态里） */
+.tile--add {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.tile--add .tile__icon {
+  background: transparent;
+  border: 1.5px dashed rgba(255, 255, 255, 0.38);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: var(--text-dim);
+  transition: border-color var(--dur-2) var(--ease), color var(--dur-2) var(--ease);
+}
+.tile--add:hover .tile__icon { border-color: rgba(255, 255, 255, 0.72); color: var(--text); }
+.tile--add .tile__name { color: var(--text-dim); }
+.tile__plus {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* 删除徽标。用 span 而不是 button —— <a> 里不允许嵌交互内容，
+   span 不是「交互内容」，这样嵌套才合法。点击由网格统一代理。 */
+.tile__del {
+  position: absolute;
+  top: -5px;
+  right: 4px;
+  z-index: 1;
+  display: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(178, 56, 56, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.tile__del::before,
+.tile__del::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 1.5px;
+  margin: -0.75px 0 0 -4.5px;
+  background: #fff;
+}
+.tile__del::before { transform: rotate(45deg); }
+.tile__del::after { transform: rotate(-45deg); }
+.shortcuts.is-editable .tile__del { display: block; }
+
+.shortcuts.is-editable .tile:not(.tile--add) {
+  cursor: grab;
+  touch-action: none;              /* 触屏上别把拖拽识别成滚动 */
+}
+
+/* 排序时的占位块：必须给显式高度，否则窄窗口下它单独占一行时行高会塌 */
+.tile--slot {
+  visibility: hidden;
+  width: 76px;
+  min-height: var(--slot-h, 76px);
+  pointer-events: none;
+}
+
+/* 排序中抬起来跟着指针走的那个。
+   ⚠️ 必须是 absolute，**不能**是 fixed：.widget 上有 transform，它会成为 fixed 后代的
+   包含块，left/top 于是被解释成「相对组件左上角」而不是「相对视口」——
+   磁贴会整整偏出一个组件原点的距离，拖起来就是「飘到别处去了」（实测偏移 270, 522.6）。
+   absolute 的包含块同样是 .widget，但坐标系一致了，sortable.js 把它的 rect 减掉即可。 */
+.tile.is-sorting {
+  position: absolute;
+  z-index: var(--z-bar);
+  margin: 0;
+  pointer-events: none;
+  transition: none;                /* 关掉那 180ms 过渡，否则跟手会有延迟 */
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  backdrop-filter: blur(10px) saturate(160%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  cursor: grabbing;
+}
+
+/* 表单（添加快捷方式用，和设置面板共用 .field / .btn） */
+.field { display: block; padding: 2px 4px 6px; }
+
+.field__label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.field__input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+}
+.field__input::placeholder { color: var(--text-faint); }
+.field__input:focus { border-color: var(--glass-border-hi); background: rgba(255, 255, 255, 0.12); }
+
+.field__error {
+  min-height: 1.3em;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: #ffb4b4;
+}
+
+.popover__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 4px 2px;
+}
+/* 删除推到最左边，和「取消 / 保存」拉开距离，免得手滑点到 */
+.popover__actions .btn--danger { margin-right: auto; }
+
+#tileForm { width: 268px; }
+
+/* 表单里的图标一栏：左边是预览，右边是「上传 / 用网站图标」 */
+.icon-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+}
+.icon-picker__preview {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+}
+.icon-picker__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- 右下角壁纸版权 ---------- */
+
+/* 位置和宽度上限交给 .widget[data-widget="credit"] */
+.credit {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.44);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 800ms var(--ease) 400ms;
+}
+.credit.is-ready { opacity: 1; }
+
+/* ---------- 天气卡片（右下角） ---------- */
+
+/* 位置交给 .widget[data-widget="weather"]，这里只提供浮层的定位上下文 */
+.weather {
+  position: relative;
+}
+
+.weather__pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 15px;
+  border-radius: var(--radius-pill);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: background 180ms var(--ease), border-color 180ms var(--ease);
+}
+.weather__pill:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hi);
+}
+
+.weather__icon { flex: none; display: grid; place-items: center; width: 22px; height: 22px; }
+.weather__glyph { display: block; width: 22px; height: 22px; }
+
+.weather__temp {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.weather__city { font-size: 13px; color: var(--text-dim); }
+
+.weather__range {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 浮层（引擎下拉 / 天气面板 / 快捷方式表单共用） ---------- */
+
+/* 定位由 js/popover.js 算好后写进 left/top，这里只管观感。
+   三处浮层共用同一套材质、圆角和入场动画 —— 这是「风格不割裂」的落点。 */
+.popover {
+  position: absolute;
+  z-index: 1;
+  display: none;
+  padding: 8px;
+  border-radius: var(--radius-lg);
+}
+.popover.is-open {
+  display: block;
+  animation: layer-pop 180ms var(--ease);
+}
+
+@keyframes layer-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+}
+
+.engine-menu { min-width: 152px; }
+
+/* 列表行：引擎下拉项、城市搜索结果、设置里的列表行共用 */
+.menu-item,
+.weather__result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 140ms var(--ease);
+}
+.menu-item:hover,
+.menu-item:focus-visible,
+.weather__result:hover,
+.weather__result:focus-visible {
+  background: var(--glass-bg-hover);
+  outline: none;
+}
+
+.menu-item__check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--text);
+}
+
+/* 城市面板：只管宽度，位置和开关都交给 popover.js */
+.weather__panel { width: 264px; }
+
+/* 输入行：放大镜 + 输入框。图标是为了让这一行一眼区别于下面的候选项 */
+.weather__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.weather__search-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--text-faint);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.weather__input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.weather__input::placeholder { color: var(--text-faint); }
+
+.weather__results {
+  max-height: 232px;
+  margin: 6px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* .weather__result 的底子已经并进上面的 .menu-item 共用块，这里只留它特有的部分 */
+
+.weather__result-name { font-size: 13.5px; }
+
+.weather__result-meta {
+  flex: none;
+  max-width: 56%;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.weather__msg {
+  padding: 10px 8px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* ---------- 共享控件 ----------
+   设置面板、浮层、编辑条都用这一套，保证「控件在哪都长一样」 */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease);
+}
+.btn:hover { background: var(--glass-bg-hover); border-color: var(--glass-border-hi); }
+.btn:disabled { opacity: 0.42; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--glass-bg); border-color: var(--glass-border); }
+
+.btn--primary { background: rgba(255, 255, 255, 0.24); border-color: rgba(255, 255, 255, 0.36); }
+.btn--primary:hover { background: rgba(255, 255, 255, 0.32); }
+
+.btn--ghost { background: transparent; }
+.btn--ghost:hover { background: var(--glass-bg-hover); }
+
+.btn--danger { background: rgba(186, 62, 62, 0.30); border-color: rgba(255, 255, 255, 0.28); }
+.btn--danger:hover { background: rgba(186, 62, 62, 0.52); border-color: rgba(255, 255, 255, 0.44); }
+
+.btn--sm { height: 28px; padding: 0 10px; font-size: 12px; }
+
+/* ⚠️ 必须显式写：.btn 上的 display: inline-flex 会盖掉 [hidden] 自带的 display: none，
+   于是 hidden 的按钮照样显示出来 */
+.btn[hidden] { display: none; }
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease), color var(--dur-2) var(--ease);
+}
+.icon-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.icon-btn:hover { background: var(--glass-bg-hover); color: var(--text); }
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  font-size: 13.5px;
+}
+.row__label { color: var(--text-dim); }
+.row__value { color: var(--text); }
+.row--switch { cursor: pointer; }
+.row--switch .row__label { color: var(--text); }
+
+/* 开关：关掉 checkbox 的原生外观重画，跟浮层、按钮是同一套材质 */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+  transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease);
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.78);
+  transition: transform var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+}
+.switch:checked { background: rgba(255, 255, 255, 0.34); border-color: rgba(255, 255, 255, 0.46); }
+.switch:checked::after { transform: translateX(16px); background: #fff; }
+
+/* 焦点态统一到这一条，不再各处各写一份 */
+:where(.btn, .icon-btn, .switch, .menu-item, .tile, .weather__pill, .settings-btn):focus-visible {
+  outline: var(--outline);
+  outline-offset: 2px;
+}
+
+/* ---------- 设置入口 ---------- */
+
+.settings-btn {
+  position: fixed;
+  z-index: var(--z-bar);
+  top: 16px;
+  right: 22px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: var(--text);
+  cursor: pointer;
+  /* 常驻但低调：平时半透明，悬停/聚焦才清晰。和左下角壁纸版权同一观感。
+     自身 opacity 是安全的 —— backdrop root 约束只针对祖先元素。 */
+  opacity: 0.42;
+  transition: opacity var(--dur-3) var(--ease), background var(--dur-2) var(--ease);
+}
+.settings-btn:hover,
+.settings-btn:focus-visible { opacity: 1; background: var(--glass-bg-hover); }
+.settings-btn svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+/* ---------- 编辑模式底栏 ---------- */
+
+.edit-bar {
+  position: fixed;
+  z-index: var(--z-bar);
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px 8px 18px;
+  border-radius: var(--radius-pill);
+  background: rgba(16, 20, 30, 0.66);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.42), var(--glass-highlight);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  animation: layer-pop 200ms var(--ease);
+}
+/* 必须显式写：上面那条 display:flex 会盖掉 [hidden] 自带的 display:none */
+.edit-bar[hidden] { display: none; }
+.edit-bar__hint {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ---------- 编辑模式 ---------- */
+
+/* 虚线框用 outline 而不是 border：border 会改变 offsetWidth/offsetHeight，
+   于是按百分比重算位置时组件会跳一下，还会把拖拽缓存的尺寸搞错。 */
+body.is-editing .widget {
+  outline: 1.5px dashed rgba(255, 255, 255, 0.45);
+  outline-offset: 6px;
+  border-radius: 14px;
+  cursor: grab;
+  touch-action: none;          /* 触屏上别把拖拽识别成滚动手势 */
+}
+body.is-editing .widget.is-dragging {
+  cursor: grabbing;
+  z-index: 25;                 /* 正拖着的那个压过所有邻居 */
+  outline-color: rgba(255, 255, 255, 0.85);
+}
+
+/* 隐藏的组件在编辑态里仍然要露出来，否则没有地方能把它点回来。
+   压暗用 ::after 蒙层，**不能用 opacity** —— 那会让组件里的毛玻璃整块失效。 */
+body.is-editing .widget[data-hidden="1"] { display: block; }
+body.is-editing .widget[data-hidden="1"]::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 16px;
+  background: rgba(8, 10, 16, 0.66);
+  pointer-events: none;
+}
+/* 隐藏状态把「隐藏」按钮转成「恢复」的意思 */
+body.is-editing .widget[data-hidden="1"] .widget__hide { transform: rotate(45deg); }
+
+.widget__chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 1;                  /* 压在 ::after 蒙层之上，隐藏状态也点得到 */
+  display: none;
+  pointer-events: none;
+}
+body.is-editing .widget__chrome { display: block; }
+
+.widget__grip,
+.widget__hide {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: rgba(16, 20, 30, 0.80);
+  color: var(--text);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background var(--dur-2) var(--ease),
+              border-color var(--dur-2) var(--ease),
+              transform var(--dur-2) var(--ease);
+}
+.widget__grip { top: -11px; left: -11px; cursor: grab; }
+.widget__hide { top: -11px; right: -11px; }
+.widget__grip:hover { background: rgba(44, 52, 72, 0.92); border-color: var(--glass-border-hi); }
+.widget__hide:hover { background: rgba(186, 62, 62, 0.88); border-color: rgba(255, 255, 255, 0.4); }
+.widget__grip svg,
+.widget__hide svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+}
+
+/* 编辑态下磁贴的悬停位移会和拖拽的 transform 打架，先关掉 */
+body.is-editing .tile:hover,
+body.is-editing .tile:active { transform: none; }
+
+/* ---------- 吸附辅助线 ---------- */
+
+/* 和 .widget 的百分比坐标系同源（都是 .stage 的 padding box），
+   所以 left/top 直接写像素就行，不需要任何偏移换算 */
+.guides {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-guides);
+  pointer-events: none;
+}
+
+.guide {
+  position: absolute;
+  background: rgba(126, 192, 255, 0.80);
+  box-shadow: 0 0 8px rgba(90, 160, 255, 0.55);
+}
+.guide--x { top: 0; bottom: 0; width: 1px; }
+.guide--y { left: 0; right: 0; height: 1px; }
+.guide.is-center { background: rgba(158, 214, 255, 0.95); }
+
+/* ---------- 设置模态 ---------- */
+
+.modal {
+  /* 清掉 <dialog> 的 UA 默认样式，尺寸交给里面的 sheet */
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.modal::backdrop {
+  /* ⚠️ 这里**不能**加 backdrop-filter：遮罩若和面板构成祖先关系，
+     面板就只会去模糊「一层纯色遮罩」，看起来完全没糊。
+     用 <dialog> 时两者是兄弟，天然没这个问题 —— 但也别没事找事加上。 */
+  background: rgba(6, 9, 16, 0.46);
+  animation: backdrop-in 200ms var(--ease);
+}
+@keyframes backdrop-in { from { background: rgba(6, 9, 16, 0); } }
+
+.modal[open] .modal__sheet { animation: layer-pop 200ms var(--ease); }
+
+.modal__sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, calc(100vw - 40px));
+  max-height: min(76vh, 720px);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 16px 12px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.modal__body {
+  padding: 14px 16px 18px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.card {
+  padding: 14px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.055);
+}
+.card + .card { margin-top: 10px; }
+
+.card__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.card__list { display: flex; flex-direction: column; gap: 2px; }
+.card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.card__hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-faint);
+}
+
+/* 设置里的自定义壁纸：缩略图 + 文件名 */
+.wallpaper-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 0 4px;
+}
+.wallpaper-pick__thumb {
+  flex: none;
+  width: 76px;
+  height: 44px;
+  border: 1px dashed var(--glass-border);
+  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.06);
+  background-size: cover;
+  background-position: center;
+}
+.wallpaper-pick__thumb.is-ready { border-style: solid; border-color: var(--glass-border-hi); }
+.wallpaper-pick__name {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 细节 ---------- */
+
+::selection { background: rgba(255, 255, 255, 0.26); }
+
+/* 窄窗口 / 分屏 */
+@media (max-width: 560px) {
+  .stage { inset: 16px; }
+  .search { height: 50px; }
+  .clock__meta { letter-spacing: 0.03em; }
+  .credit { font-size: 11px; }
+  /* .stage 的 inset 改成 16px 后，可用宽就是 100vw - 32px */
+  .widget[data-widget="search"],
+  .widget[data-widget="shortcuts"] { width: calc(100vw - 32px); }
+  .widget[data-widget="credit"] { max-width: 44vw; }
+  .weather__pill { height: 34px; gap: 6px; padding: 0 12px; }
+  .weather__panel { width: min(264px, calc(100vw - 32px)); }
+}
+
+/* 尊重系统的「减少动态效果」 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

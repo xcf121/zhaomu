@@ -1,0 +1,13 @@
+# 测试与预览产物
+.preview/
+__pycache__/
+*.pyc
+
+# 系统文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 编辑器
+.vscode/
+.idea/

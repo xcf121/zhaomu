@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>朝暮</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="is-booting">
+
+  <!-- 背景：两层叠放，换壁纸时交叉淡入 -->
+  <div class="bg" id="bgA" aria-hidden="true"></div>
+  <div class="bg" id="bgB" aria-hidden="true"></div>
+  <div class="bg-scrim" aria-hidden="true"></div>
+
+  <!-- 组件定位容器。每个 .widget 的位置由自身的 --x / --y 决定：
+       换算写在 style.css 里，这里只提供坐标系。
+       放在最外层是必要的 —— .widget 上有 transform，它会成为组件内浮层的包含块。 -->
+  <main class="stage" id="stage">
+
+    <div class="widget" data-widget="clock">
+      <div class="widget__content">
+        <header class="clock">
+          <div class="clock__time" id="clockTime">--:--</div>
+          <div class="clock__meta">
+            <span id="clockDate">　</span>
+            <span class="clock__sep" aria-hidden="true">·</span>
+            <span id="clockGreeting"></span>
+          </div>
+        </header>
+      </div>
+    </div>
+
+    <div class="widget" data-widget="search">
+      <div class="widget__content">
+        <form class="search glass" id="searchForm" role="search" aria-label="搜索">
+          <button class="search__engine" id="engineBtn" type="button"
+                  aria-haspopup="listbox" aria-expanded="false" title="切换搜索引擎">
+            <span id="engineName">百度</span>
+            <svg class="search__chev" viewBox="0 0 12 12" aria-hidden="true">
+              <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor"
+                    stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <input class="search__input" id="searchInput" type="text" name="q"
+                 placeholder="搜索，或输入网址" spellcheck="false"
+                 autocomplete="off" autocapitalize="off" autocorrect="off"
+                 aria-label="搜索关键词或网址">
+          <kbd class="search__hint" id="searchHint" aria-hidden="true">/</kbd>
+        </form>
+
+        <div class="popover glass" id="engineMenu" role="listbox" aria-label="选择搜索引擎"></div>
+      </div>
+    </div>
+
+    <div class="widget" data-widget="shortcuts">
+      <div class="widget__content">
+        <section class="shortcuts" id="shortcuts" aria-label="快捷方式"></section>
+
+        <div class="popover glass" id="tileForm" role="dialog" aria-label="编辑快捷方式">
+          <label class="field">
+            <span class="field__label">名称</span>
+            <input class="field__input" id="tileName" type="text"
+                   placeholder="例如：GitHub" autocomplete="off">
+          </label>
+          <label class="field">
+            <span class="field__label">网址</span>
+            <input class="field__input" id="tileUrl" type="text"
+                   placeholder="例如：github.com" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="field">
+            <span class="field__label">图标</span>
+            <div class="icon-picker">
+              <span class="icon-picker__preview" id="tileIconPreview"></span>
+              <div class="icon-picker__actions">
+                <button class="btn btn--ghost btn--sm" id="tileIconUpload" type="button">上传图片</button>
+                <button class="btn btn--ghost btn--sm" id="tileIconReset" type="button" hidden>用网站图标</button>
+              </div>
+            </div>
+            <input type="file" id="tileIconFile" accept="image/*" hidden>
+          </div>
+          <p class="field__error" id="tileError"></p>
+          <div class="popover__actions">
+            <button class="btn btn--danger" id="tileDelete" type="button" hidden>删除</button>
+            <button class="btn btn--ghost" id="tileCancel" type="button">取消</button>
+            <button class="btn btn--primary" id="tileSave" type="button">添加</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="widget" data-widget="weather">
+      <div class="widget__content">
+        <div class="weather" id="weather">
+          <button class="weather__pill glass" id="weatherBtn" type="button"
+                  aria-haspopup="dialog" aria-expanded="false">
+            <span class="weather__icon" id="weatherIcon" aria-hidden="true"></span>
+            <span class="weather__temp" id="weatherTemp">--</span>
+            <span class="weather__city" id="weatherCity">　</span>
+            <span class="weather__range" id="weatherRange"></span>
+          </button>
+
+          <div class="popover weather__panel glass" id="weatherPanel" role="dialog" aria-label="选择城市">
+            <div class="weather__search">
+              <svg class="weather__search-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.4"/>
+                <path d="M10.4 10.4 14.2 14.2"/>
+              </svg>
+              <input class="weather__input" id="weatherInput" type="text"
+                     placeholder="搜索城市，如：杭州" autocomplete="off" spellcheck="false"
+                     aria-label="搜索城市">
+            </div>
+            <ul class="weather__results" id="weatherResults"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="widget" data-widget="credit">
+      <div class="widget__content">
+        <p class="credit" id="credit"></p>
+      </div>
+    </div>
+
+    <!-- 吸附辅助线。和 .widget 的百分比坐标系同源，所以 left/top 直接写像素即可 -->
+    <div class="guides" id="guides" aria-hidden="true"></div>
+
+  </main>
+
+  <!-- 编辑模式底栏。编辑态本身也注册成一个浮层，所以 Escape 能退出它。 -->
+  <div class="edit-bar" id="editBar" hidden>
+    <span class="edit-bar__hint">拖动组件调整位置 · 拖动图标调整顺序 · 右键图标可改名换图</span>
+    <button class="btn btn--primary" id="editDone" type="button">完成</button>
+  </div>
+
+  <!-- 设置入口。常驻右上角但低调：平时半透明，悬停/聚焦才清晰，
+       和左下角壁纸版权同一观感，不会在壁纸上抢镜。 -->
+  <button class="settings-btn glass" id="settingsBtn" type="button" aria-label="设置" title="设置">
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M3 6.5h7.2M14.8 6.5H17M3 13.5h2.2M9.8 13.5H17"/>
+      <circle cx="12.5" cy="6.5" r="2.3"/>
+      <circle cx="7.5" cy="13.5" r="2.3"/>
+    </svg>
+  </button>
+
+  <!-- 设置用原生 <dialog>：焦点陷阱、Escape 关闭、背景 inert、顶层堆叠全是白拿的，
+       不用自己写，也不参与上面那套 z-index。 -->
+  <dialog class="modal" id="settings" aria-label="设置">
+    <div class="modal__sheet glass">
+      <header class="modal__head">
+        <h2 class="modal__title">设置</h2>
+        <button class="icon-btn" id="settingsClose" type="button" aria-label="关闭设置">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="modal__body">
+        <section class="card">
+          <h3 class="card__title">界面组件</h3>
+          <div class="card__list" id="widgetToggles"></div>
+          <div class="card__actions">
+            <button class="btn" id="adjustLayout" type="button">调整布局</button>
+            <button class="btn btn--ghost" id="resetLayout" type="button">恢复默认布局</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">搜索引擎</h3>
+          <div class="card__list" id="engineChoices"></div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">天气</h3>
+          <div class="card__list" id="cityRow"></div>
+          <div class="card__actions">
+            <button class="btn" id="changeCity" type="button">更换城市</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">壁纸</h3>
+          <div class="card__list" id="wallpaperChoices"></div>
+          <div class="wallpaper-pick">
+            <span class="wallpaper-pick__thumb" id="wallpaperThumb" aria-hidden="true"></span>
+            <span class="wallpaper-pick__name" id="wallpaperName">还没传过图片</span>
+          </div>
+          <div class="card__actions">
+            <button class="btn" id="wallpaperUpload" type="button">上传图片</button>
+            <button class="btn btn--ghost" id="wallpaperClear" type="button">移除</button>
+          </div>
+          <input type="file" id="wallpaperFile" accept="image/*" hidden>
+          <p class="card__hint" id="wallpaperHint">上传的图片会压到长边 2560px 后存在本地，选中它就换过去。</p>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">快捷方式</h3>
+          <div class="card__list">
+            <div class="row">
+              <span class="row__label">已添加</span>
+              <span class="row__value" id="shortcutCount">—</span>
+            </div>
+          </div>
+          <div class="card__actions">
+            <button class="btn" id="editShortcuts" type="button">调整图标</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">数据</h3>
+          <div class="card__actions">
+            <button class="btn" id="exportConfig" type="button">导出配置</button>
+            <button class="btn" id="importConfig" type="button">导入配置</button>
+            <button class="btn btn--ghost" id="resetConfig" type="button">恢复默认设置</button>
+          </div>
+          <p class="card__hint" id="importHint">导入会覆盖当前的搜索引擎、壁纸、天气、快捷方式与布局。</p>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">云同步</h3>
+          <div class="card__list" id="syncStatus"></div>
+        </section>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
