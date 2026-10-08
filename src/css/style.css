@@ -27,8 +27,14 @@
      （实拍反馈「过于明显、不够自然」）；改成三层软阴影后近层仍留淡淡一圈。
      描边是**沿字形轮廓均匀一圈**，没有方向、不积块，浅底深底都只是一条边。
      靠 paint-order 把描边画在字面**之下**（见文件末尾的 @supports 兜底），
-     所以白色字面不会被啃掉一圈。 */
-  --label-stroke: 2px rgba(0, 0, 0, 0.34);
+     所以白色字面不会被啃掉一圈。
+     ⚠️ 宽度写 em 不写 px：这个 token 由磁贴名（13px）和一言正文（13~15px）共用，
+     按字号等比才对，写死 px 会让字号大的那个描边偏细。
+     ⚠️ 用这个 token 的字**必须是不透明的白**：描边画在字面之下，字面只要半透明，
+     底下的描边就会从笔画内侧透上来，糊出一圈灰、字看着是空心的 ——
+     磁贴名原先就是「.94 白 + 2px 描边」，实拍反馈「名字看不清」，根因在这里。
+     半透明的字一律走 --label-shadow-dim，不描边。 */
+  --label-stroke: 0.055em rgba(0, 0, 0, 0.50);
   --label-shadow: 0 0 2px rgba(0, 0, 0, 0.30);
   /* 半透明的字不能描边：描边画在字面之下，字面越透明透出来的黑越多，字会发灰
      （一言出处是 66% 的白，实拍确实发灰）。这种只配一层紧贴的软阴影。 */
@@ -509,9 +515,13 @@ body.is-booting .stage { transform: translateY(10px); }
 
 .tile__name {
   max-width: 100%;
-  font-size: 12px;
+  /* 13px 是「五个汉字还放得下」的极限（网易云音乐 65px / 可用 68px），再大就该截断了；
+     12px 的中文压在花壁纸上本来就偏小偏虚。 */
+  font-size: 13px;
   line-height: 1.2;
-  color: rgba(255, 255, 255, 0.94);
+  /* 必须是不透明的白：半透明的字面会透出底下的描边、字发灰，
+     理由见 :root 的 --label-stroke。悬停也不再改颜色（本来就是纯白了）。 */
+  color: #fff;
   /* 配方与理由见 :root 的 --label-stroke */
   -webkit-text-stroke: var(--label-stroke);
   paint-order: stroke fill;
@@ -519,9 +529,7 @@ body.is-booting .stage { transform: translateY(10px); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 160ms var(--ease);
 }
-.tile:hover .tile__name { color: var(--text); }
 
 /* ---------- 快捷方式：添加 / 删除 / 排序 ---------- */
 
@@ -542,7 +550,13 @@ body.is-booting .stage { transform: translateY(10px); }
   transition: border-color var(--dur-2) var(--ease), color var(--dur-2) var(--ease);
 }
 .tile--add:hover .tile__icon { border-color: rgba(255, 255, 255, 0.72); color: var(--text); }
-.tile--add .tile__name { color: var(--text-dim); }
+/* 「+」的名字是刻意的次要信息（80% 白），所以它**不能**描边 ——
+   半透明的字面会把描边透出来。改用只留一层紧贴软阴影的那档。 */
+.tile--add .tile__name {
+  color: var(--text-dim);
+  -webkit-text-stroke: 0;
+  text-shadow: var(--label-shadow-dim);
+}
 .tile__plus {
   width: 19px;
   height: 19px;
