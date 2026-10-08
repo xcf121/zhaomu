@@ -1,0 +1,11 @@
+# 统一按 LF 存、按 LF 检出。
+# 少了这一条：core.autocrlf=true 的机器检出来是 CRLF，tools/package.py 打出来的 zip
+# 就跟别人打的不一样（实测 1.0.0 差了 46 字节，两个文件 CRLF 其余 LF）——
+# package.py 里「同样的源码打出来的包逐字节一致」那句也就名存实亡。
+* text=auto eol=lf
+
+# 二进制，别碰换行符
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
