@@ -66,6 +66,13 @@ python tools/make-icons.py
 python tools/package.py
 ```
 
+打包前留神**换行符**：仓库里存的一律是 LF（`.gitattributes` 里 `* text=auto eol=lf`）。
+少了这一条，本机 `core.autocrlf=true` 会把文件检成 CRLF，`package.py` 打出来的 zip 就跟着
+变 —— 实测同一个 tag，autocrlf 设 true / false 打出来差 46 字节，`package.py` 里那句
+「同样的源码打出来的包逐字节一致」当场作废。改 `.gitattributes` 时**别拿文本工具去动
+`src/icons/*.png`**：PNG 压缩数据里本来就可能含 `0d 0a` 字节序列，按文本处理会把图标写坏
+（已踩过，从 HEAD 恢复了）。
+
 注意：**不能直接双击 `newtab.html`**。ES 模块在 `file://` 下会被 CORS 拦死，
 `chrome.storage` 也不存在，脚本整个不执行。（已实测确认）
 
