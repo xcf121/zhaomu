@@ -15,6 +15,7 @@ import { pushLayer, popLayer, closeAll } from './layers.js';
 /** 组件清单。设置面板的开关列表也从这里生成，加组件只改这一处 */
 export const WIDGET_META = {
   clock:     { name: '时钟' },
+  quote:     { name: '每日一言' },
   search:    { name: '搜索框' },
   shortcuts: { name: '快捷方式' },
   weather:   { name: '天气' },

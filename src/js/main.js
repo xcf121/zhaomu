@@ -1,7 +1,7 @@
 /**
  * 入口：读配置 → 装配各模块。
- * 时钟、搜索、快捷方式都是同步且无网络依赖的，先跑起来让页面立刻可用；
- * 壁纸是异步的，放到首帧之后，不阻塞界面出现。
+ * 时钟、搜索、快捷方式是同步铺好画面的；每日一言要读一次本地存储（一个微任务）才定下是哪句，联网那档在后台跑，
+ * 先跑起来让页面立刻可用；壁纸是异步的，放到首帧之后，不阻塞界面出现。
  */
 
 import { loadConfig } from './config.js';
@@ -9,6 +9,7 @@ import { driverName } from './storage.js';
 import { initLayout } from './layout.js';
 import { initSettings } from './settings.js';
 import { initClock } from './clock.js';
+import { initQuote } from './quote.js';
 import { initSearch } from './search.js';
 import { initShortcuts } from './shortcuts.js';
 import { initWallpaper } from './wallpaper.js';
@@ -21,7 +22,8 @@ async function boot() {
   // 必须在首帧前跑完，否则会闪一下「所有组件都堆在中间」
   initLayout(cfg.layout);
 
-  initClock();
+  initClock(cfg.clock);
+  initQuote(cfg.quote);
   initSearch(cfg);
   initShortcuts(cfg.shortcuts);
   initSettings(cfg);

@@ -20,6 +20,20 @@
   --text-faint:  rgba(255, 255, 255, 0.52);
   --text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55);
 
+  /* 磁贴名 / 一言这类小字用（白色字面直接压在壁纸上，底下没有玻璃托底）。
+     做法是**一圈对称的细描边** + 一层极紧的软阴影，而不是「往下投的阴影」：
+     ⚠️ 阴影只要带上明显的偏移和模糊半径、又比字形宽，就会在字底下积成一坨灰块 ——
+     原来那组 `0 1px 3px /.92 + 0 1px 12px /.72` 在浅色壁纸上就是这样
+     （实拍反馈「过于明显、不够自然」）；改成三层软阴影后近层仍留淡淡一圈。
+     描边是**沿字形轮廓均匀一圈**，没有方向、不积块，浅底深底都只是一条边。
+     靠 paint-order 把描边画在字面**之下**（见文件末尾的 @supports 兜底），
+     所以白色字面不会被啃掉一圈。 */
+  --label-stroke: 2px rgba(0, 0, 0, 0.34);
+  --label-shadow: 0 0 2px rgba(0, 0, 0, 0.30);
+  /* 半透明的字不能描边：描边画在字面之下，字面越透明透出来的黑越多，字会发灰
+     （一言出处是 66% 的白，实拍确实发灰）。这种只配一层紧贴的软阴影。 */
+  --label-shadow-dim: 0 0 2px rgba(0, 0, 0, 0.45);
+
   --radius-sm: 10px;
   --radius-md: 13px;
   --radius-lg: 18px;
@@ -154,6 +168,9 @@ body.is-booting .stage { transform: translateY(10px); }
    （每列 76+6=82px，9 列需要 732px）。更窄时会折行、组件变高 ——
    实测到 480px 宽仍不重叠，再窄就可能压到搜索框（已知退化）。 */
 .widget[data-widget="clock"]     { width: max-content; }
+/* 一言卡片：短句贴着文字，长句到 420px 折行 —— 于是它在左上角占多大，
+   取决于今天那句有多长，不会无端空出一大块玻璃 */
+.widget[data-widget="quote"]     { width: max-content; max-width: min(420px, calc(100vw - 44px)); }
 .widget[data-widget="search"]    { width: min(640px, calc(100vw - 44px)); }
 .widget[data-widget="shortcuts"] { width: min(740px, calc(100vw - 44px)); }
 .widget[data-widget="weather"]   { width: max-content; }
@@ -163,14 +180,85 @@ body.is-booting .stage { transform: translateY(10px); }
 
 .clock { text-align: center; }
 
-.clock__time {
-  font-size: clamp(62px, 11vw, 128px);
-  font-weight: 200;
-  line-height: 0.94;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;   /* 数字等宽，跳秒时不左右抖 */
+/*
+ * 时钟字形。字体、字重、字距、描边、发光全从 --clock-* 变量取，
+ * 每个样式预设只负责写一组变量 —— 于是设置面板里的示例文字只要挂上同一个
+ * data-clock-style，就自动是真实时钟的观感，不用维护第二套预览样式。
+ * 变量是继承的，所以属性挂在 .clock 上（真实时钟）或选项按钮上（示例）都行。
+ *
+ * 加一个样式 = 下面 CLOCK_STYLES 加一行 + 这里加一条规则，JS 不用动。
+ */
+.clock-face {
+  font-family: var(--clock-font, var(--font));
+  font-weight: var(--clock-weight, 200);
+  letter-spacing: var(--clock-tracking, -0.02em);
+  font-variant-numeric: tabular-nums;   /* 数字等宽，跳分时不左右抖 */
   font-feature-settings: "tnum" 1;
-  text-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+  color: var(--clock-color, var(--text));
+  text-shadow: var(--clock-shadow, 0 4px 40px rgba(0, 0, 0, 0.5));
+  filter: var(--clock-filter, none);
+}
+
+.clock__time {
+  font-size: var(--clock-size, clamp(62px, 11vw, 128px));
+  line-height: 0.94;
+}
+
+/* classic（默认）用的就是 .clock-face 里那组默认值，不另写规则 */
+
+[data-clock-style="bold"] {
+  --clock-weight: 700;
+  --clock-tracking: -0.035em;
+  --clock-size: clamp(58px, 10.4vw, 120px);
+}
+
+[data-clock-style="serif"] {
+  --clock-font: Cambria, "Songti SC", "Noto Serif SC", "Times New Roman", "SimSun", serif;
+  --clock-weight: 400;
+  --clock-tracking: 0;
+  --clock-meta-font: var(--clock-font);
+}
+
+[data-clock-style="mono"] {
+  --clock-font: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "JetBrains Mono", monospace;
+  --clock-weight: 400;
+  --clock-tracking: 0.01em;
+  --clock-size: clamp(50px, 8.8vw, 104px);   /* 等宽数字更宽，收一号才排得开 */
+  --clock-meta-font: var(--clock-font);
+}
+
+/*
+ * 空心描边：字面透明，只留一圈边。
+ * 描边宽度用 em 而不是 px —— 设置面板里那个 21px 的示例用 px 会糊成一团黑。
+ * 因为没有字面，text-shadow 也跟着失效（阴影画的是字形），改用 drop-shadow：
+ * 它算的是「描完边之后的像素」，所以亮壁纸上那圈白边仍然有暗底托着。
+ */
+[data-clock-style="outline"] {
+  --clock-color: transparent;
+  --clock-weight: 400;
+  --clock-tracking: 0.01em;
+  --clock-shadow: none;
+  --clock-filter:
+    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.60))
+    drop-shadow(0 3px 16px rgba(0, 0, 0, 0.50));
+}
+[data-clock-style="outline"] .clock-face {
+  -webkit-text-stroke: 0.032em var(--text);
+}
+
+/* 万一描边不被支持，就会得到一个「看不见的时钟」。这条兜底把它退回实心白字 ——
+   不好看总好过看不见。（现代 Chromium 都支持，纯粹是防手滑。） */
+@supports not (-webkit-text-stroke: 1px transparent) {
+  [data-clock-style="outline"] { --clock-color: var(--text); }
+}
+
+[data-clock-style="glow"] {
+  --clock-weight: 300;
+  --clock-tracking: 0.01em;
+  --clock-shadow:
+    0 0 16px rgba(190, 225, 255, 0.85),
+    0 0 52px rgba(110, 175, 255, 0.60),
+    0 2px 12px rgba(0, 0, 0, 0.60);
 }
 
 .clock__meta {
@@ -182,12 +270,49 @@ body.is-booting .stage { transform: translateY(10px); }
   font-size: clamp(13px, 1.3vw, 16px);
   font-weight: 400;
   letter-spacing: 0.06em;
+  font-family: var(--clock-meta-font, var(--font));
   color: var(--text-dim);
   text-shadow: var(--text-shadow);
   min-height: 1.4em;   /* 占位，避免时间初始化后布局跳一下 */
 }
 
 .clock__sep { color: var(--text-faint); }
+
+/* ---------- 每日一言 ---------- */
+
+/* **纯文字，不铺毛玻璃** —— 它是页面上唯一不套玻璃的组件。
+   就两行小字，给它一块半透明卡片，玻璃本身的面积比字还抢眼（用户反馈「太大一块」）。
+   去掉内边距之后它的左上角正好落在 .stage 的 0,0 上，和左下角的壁纸版权对齐。
+   宽度交给 .widget[data-widget="quote"]，这里只管字。 */
+.quote {
+  margin: 0;
+  padding: 0;
+}
+
+.quote__text {
+  margin: 0;
+  font-size: clamp(13px, 1.15vw, 15px);
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  /* 和磁贴名同一套（见 :root 的 --label-stroke）：它同样没有玻璃托底 */
+  -webkit-text-stroke: var(--label-stroke);
+  paint-order: stroke fill;
+  text-shadow: var(--label-shadow);
+}
+
+.quote__from {
+  margin-top: 5px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  /* 52% 的白在没有玻璃托底时太虚，往上提一点；出处是次要信息，仍比正文暗 */
+  color: rgba(255, 255, 255, 0.66);
+  text-align: right;
+  /* 半透明的字不描边，原因见 :root 的 --label-shadow-dim */
+  text-shadow: var(--label-shadow-dim);
+}
+/* 一言偶尔不给出处，那就整行不占位 */
+.quote__from:empty { display: none; }
 
 /* ---------- 毛玻璃基底 ---------- */
 
@@ -387,9 +512,10 @@ body.is-booting .stage { transform: translateY(10px); }
   font-size: 12px;
   line-height: 1.2;
   color: rgba(255, 255, 255, 0.94);
-  /* 双层阴影：紧的一层勾边保证字形边界，散的一层压住背景噪点。
-     单层模糊阴影在花哨壁纸上是读不出来的。 */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), 0 1px 12px rgba(0, 0, 0, 0.72);
+  /* 配方与理由见 :root 的 --label-stroke */
+  -webkit-text-stroke: var(--label-stroke);
+  paint-order: stroke fill;
+  text-shadow: var(--label-shadow);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -632,6 +758,28 @@ body.is-booting .stage { transform: translateY(10px); }
 
 .engine-menu { min-width: 152px; }
 
+/* ---------- 搜索词联想 ---------- */
+
+/* 宽度由 suggest.js 对齐搜索框（在定位之前写进去），这里只管高度上限：
+   列表再长也不能顶出屏幕，popover.js 定位时也要有个稳定的高度可用。 */
+.search-suggest {
+  max-height: min(320px, 46vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* 候选项左对齐 + 省略号。它和引擎名不一样 —— 那是一两个词，这是一整句话 */
+.menu-item--suggest {
+  justify-content: flex-start;
+  padding: 9px 12px;
+  font-size: 13.5px;
+}
+.menu-item--suggest > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* 列表行：引擎下拉项、城市搜索结果、设置里的列表行共用 */
 .menu-item,
 .weather__result {
@@ -654,6 +802,7 @@ body.is-booting .stage { transform: translateY(10px); }
 }
 .menu-item:hover,
 .menu-item:focus-visible,
+.menu-item.is-active,
 .weather__result:hover,
 .weather__result:focus-visible {
   background: var(--glass-bg-hover);
@@ -665,6 +814,16 @@ body.is-booting .stage { transform: translateY(10px); }
   width: 14px;
   height: 14px;
   color: var(--text);
+}
+
+/* 时钟样式那一行：左边名字、右边示例 + 勾。示例和真实时钟共用 .clock-face，
+   只是字号固定（真实时钟那个 clamp 放到设置行里会炸开） */
+.menu-item--clock { gap: 14px; }
+.menu-item__side { display: flex; align-items: center; gap: 10px; }
+.clock-sample {
+  display: block;
+  font-size: 21px;
+  line-height: 1.25;
 }
 
 /* 城市面板：只管宽度，位置和开关都交给 popover.js */
@@ -1116,9 +1275,21 @@ body.is-editing .tile:active { transform: none; }
   /* .stage 的 inset 改成 16px 后，可用宽就是 100vw - 32px */
   .widget[data-widget="search"],
   .widget[data-widget="shortcuts"] { width: calc(100vw - 32px); }
+  .widget[data-widget="quote"]  { max-width: calc(100vw - 32px); }
   .widget[data-widget="credit"] { max-width: 44vw; }
   .weather__pill { height: 34px; gap: 6px; padding: 0 12px; }
   .weather__panel { width: min(264px, calc(100vw - 32px)); }
+}
+
+/* 描边依赖 paint-order 把字面画在描边**之上**。
+   不支持时描边会盖着字面走（默认顺序是 fill 后 stroke），白字被啃掉一圈、变细变脏，
+   所以整组退回「只有一层紧贴的软阴影」——不描边，也不堆宽阴影。 */
+@supports not (paint-order: stroke) {
+  .tile__name,
+  .quote__text {
+    -webkit-text-stroke: 0;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.55), 0 0 5px rgba(0, 0, 0, 0.35);
+  }
 }
 
 /* 尊重系统的「减少动态效果」 */

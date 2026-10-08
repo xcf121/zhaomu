@@ -10,6 +10,8 @@
 
 import { patchConfig, replaceConfig, onConfigChange } from './config.js';
 import { WIDGET_META, getWidgetIds, resetLayout, setEditing, isEditing } from './layout.js';
+import { CLOCK_STYLES, isClockStyle } from './clock.js';
+import { QUOTE_SOURCES, isQuoteSource } from './quote.js';
 import { getStatus as getSyncStatus, listProviders } from './sync.js';
 import { set as storageSet } from './storage.js';
 import { initWallpaper, fileToWallpaper } from './wallpaper.js';
@@ -56,6 +58,37 @@ function choiceRow(label, selected, onPick) {
   btn.append(span);
   if (selected) btn.insertAdjacentHTML('beforeend', CHECK_SVG);
 
+  btn.addEventListener('click', onPick);
+  return btn;
+}
+
+/**
+ * 时钟样式那一行：左边样式名，右边一段示例 —— 用的就是**该样式真实的字体与观感**。
+ * 做法是把同一个 data-clock-style 挂在按钮上：CSS 里那套 --clock-* 变量是继承的，
+ * 所以示例文字自动拿到真实时钟的字体 / 字重 / 描边 / 发光，不用另写一套预览样式。
+ */
+function clockStyleRow(style, selected, onPick) {
+  const btn = document.createElement('button');
+  btn.className = 'menu-item menu-item--clock';
+  btn.type = 'button';
+  btn.setAttribute('aria-selected', String(selected));
+  btn.dataset.clockStyle = style.value;
+
+  const label = document.createElement('span');
+  label.textContent = style.name;
+
+  const side = document.createElement('span');
+  side.className = 'menu-item__side';
+
+  const sample = document.createElement('span');
+  sample.className = 'clock-face clock-sample';
+  sample.textContent = '08:30';
+  sample.setAttribute('aria-hidden', 'true');   // 读屏念「零八三零」只会添乱
+  side.append(sample);
+
+  if (selected) side.insertAdjacentHTML('beforeend', CHECK_SVG);
+
+  btn.append(label, side);
   btn.addEventListener('click', onPick);
   return btn;
 }
@@ -107,11 +140,39 @@ function render() {
       patchConfig({ layout: { widgets: { [id]: { visible } } } });
     })));
 
-  // 搜索引擎
-  el.engineChoices.replaceChildren(...cfg.search.engines.map((engine) =>
-    choiceRow(engine.name, engine.id === cfg.search.engineId, () => {
-      patchConfig({ search: { engineId: engine.id } });
+  // 时钟样式
+  el.clockChoices.replaceChildren(...CLOCK_STYLES.map((style) =>
+    clockStyleRow(style, cfg.clock?.style === style.value, () => {
+      patchConfig({ clock: { style: style.value } });
     })));
+
+  // 每日一言
+  el.quoteChoices.replaceChildren(...QUOTE_SOURCES.map((source) =>
+    choiceRow(source.name, cfg.quote?.source === source.value, () => {
+      patchConfig({ quote: { source: source.value } });
+    })));
+  el.quoteHint.textContent = cfg.quote?.source === 'hitokoto'
+    ? '联网取自一言（hitokoto.cn）：每打开一次新标签页从池子里取一句，后台接着补货；'
+      + '第一次会先用内置那句顶上。拿不到就继续用内置句子，不会空着。'
+    : '内置 60 句：每打开一次新标签页换一句，一袋抽完才重洗，所以不会连着两次是同一句。'
+      + '不发任何网络请求，断网也在。';
+
+  // 搜索引擎
+  const suggestOn = cfg.search?.suggest !== false;
+  el.engineChoices.replaceChildren(
+    ...cfg.search.engines.map((engine) =>
+      choiceRow(engine.name, engine.id === cfg.search.engineId, () => {
+        patchConfig({ search: { engineId: engine.id } });
+      })),
+    switchRow('输入时联想搜索词', suggestOn, (on) => {
+      patchConfig({ search: { suggest: on } });
+    }),
+  );
+  // 这句得说清楚：开了之后，输入框里敲的字是会发出去的
+  el.searchSuggestHint.textContent = suggestOn
+    ? '开启中：敲字时会去问当前引擎自己的联想接口（百度 / Bing / Google / B站 各用各的，'
+      + 'GitHub 没有这个接口）。只发你正在敲的那几个字，不带别的信息；输入停顿一下才发一次。'
+    : '已关闭：输入框里敲的字一个字都不发出去，按回车直接搜。';
 
   // 天气
   const weatherHidden = cfg.layout.widgets.weather?.visible === false;
@@ -265,6 +326,7 @@ function sanitizeConfig(raw) {
       if (engines.length) search.engines = engines;
     }
     if (typeof raw.search.engineId === 'string') search.engineId = raw.search.engineId;
+    if (typeof raw.search.suggest === 'boolean') search.suggest = raw.search.suggest;
     if (Object.keys(search).length) out.search = search;
   }
 
@@ -311,6 +373,16 @@ function sanitizeConfig(raw) {
       t.ttlMinutes = num(raw.weather.ttlMinutes, 1, 1440, 10);
     }
     if (Object.keys(t).length) out.weather = t;
+  }
+
+  // 时钟样式与一言来源都只认白名单里的值：写进一个不认识的 id 只会让 CSS 匹配不上，
+  // 时钟退回默认字体、一言静默不联网 —— 不致命，但完全不是用户的本意
+  if (raw.clock && typeof raw.clock === 'object' && isClockStyle(raw.clock.style)) {
+    out.clock = { style: raw.clock.style };
+  }
+
+  if (raw.quote && typeof raw.quote === 'object' && isQuoteSource(raw.quote.source)) {
+    out.quote = { source: raw.quote.source };
   }
 
   if (Array.isArray(raw.shortcuts)) {
@@ -372,7 +444,11 @@ export function initSettings(initial) {
     openBtn: document.getElementById('settingsBtn'),
     closeBtn: document.getElementById('settingsClose'),
     widgetToggles: document.getElementById('widgetToggles'),
+    clockChoices: document.getElementById('clockChoices'),
+    quoteChoices: document.getElementById('quoteChoices'),
+    quoteHint: document.getElementById('quoteHint'),
     engineChoices: document.getElementById('engineChoices'),
+    searchSuggestHint: document.getElementById('searchSuggestHint'),
     cityRow: document.getElementById('cityRow'),
     changeCity: document.getElementById('changeCity'),
     wallpaperChoices: document.getElementById('wallpaperChoices'),

@@ -10,6 +10,13 @@ const CONFIG_KEY = 'config';
 export const DEFAULT_CONFIG = {
   search: {
     engineId: 'bing',
+    /**
+     * 输入时要不要去问引擎自己的联想接口。
+     * 接口地址与返回格式**写死在 js/suggest.js 里**，不进配置 —— 它是「哪家引擎」的属性，
+     * 不是用户偏好；而且 config.js 的深合并对数组是整体替换，放进 engines 会让
+     * 老配置里那份 engines 把新加的字段整个盖掉，升级上来的人静默失效。
+     */
+    suggest: true,
     engines: [
       { id: 'baidu',    name: '百度',   url: 'https://www.baidu.com/s?wd=%s' },
       { id: 'bing',     name: 'Bing',   url: 'https://www.bing.com/search?q=%s' },
@@ -36,6 +43,24 @@ export const DEFAULT_CONFIG = {
     latitude: 29.56026,
     longitude: 106.55771,
     ttlMinutes: 10,          // 超过这个时长才重新请求
+  },
+
+  /**
+   * 时钟。
+   * style 决定字体与视觉风格，可选值见 js/clock.js 的 CLOCK_STYLES，
+   * 观感全在 style.css 的 [data-clock-style=…] 那几条规则里 —— 这里只存一个 id。
+   */
+  clock: {
+    style: 'classic',        // classic | bold | serif | mono | outline | glow
+  },
+
+  /**
+   * 每日一言。**每打开一次新标签页换一句**（不是按天轮换，见 js/quote.js）。
+   * builtin  —— 内置 60 句抽签袋，零网络、断网也在（默认）
+   * hitokoto —— 一言 API（v1.hitokoto.cn），池子里取现成的、后台补货，拿不到就退回内置句子
+   */
+  quote: {
+    source: 'builtin',       // builtin | hitokoto
   },
 
   // 初始种子，M4 做设置面板后由用户自由增删改
@@ -66,11 +91,14 @@ export const DEFAULT_CONFIG = {
    */
   layout: {
     widgets: {
-      // 这三个 y 是拿真机重叠检测标定出来的（1920×1080 到 420×780 共 14 档尺寸），
+      // 这几个值是拿真机重叠检测标定出来的（1920×1080 到 420×780 共 14 档尺寸），
       // 不是推算值 —— 组件高度不随窗口等比缩放，百分比定位必须实测。
       // 实测：1920×1080 到 480×720 共 13 档尺寸都不重叠；再窄（约 420px）
       // 快捷方式会折成三行把搜索框压住，那时只能手动拖开或「恢复默认布局」。
+      // quote 另跑了 22 档（3840×2160 到 420×780，含 4K、竖屏、1280×620 这类扁窗口）：
+      // 贴在左上角 0,0 与其它五个都不重叠 —— 它只跟时钟同一个横带，而时钟是居中的。
       clock:     { visible: true, x: 50,  y: 25  },
+      quote:     { visible: true, x: 0,   y: 0   },
       search:    { visible: true, x: 50,  y: 50  },
       shortcuts: { visible: true, x: 50,  y: 74  },
       weather:   { visible: true, x: 100, y: 100 },

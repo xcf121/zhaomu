@@ -9,6 +9,7 @@
 import { patchConfig, onConfigChange } from './config.js';
 import { anyOpen } from './layers.js';
 import { togglePopover, closePopover, isPopoverOpen } from './popover.js';
+import { initSuggest } from './suggest.js';
 
 const EXPLICIT_URL   = /^https?:\/\/\S+$/i;
 const DOMAIN_LIKE    = /^[\w-]+(\.[\w-]+)*\.[a-z]{2,}(:\d+)?(\/\S*)?$/i;
@@ -84,26 +85,45 @@ export function initSearch(cfg) {
       .catch((err) => console.warn('[搜索] 保存引擎选择失败：', err));
   }
 
-  function submit(event) {
-    event.preventDefault();
-    const raw = input.value.trim();
-    if (!raw) return;
+  /**
+   * 真正开搜：关键词走当前引擎，网址直接跳过去，两种都在新标签页打开。
+   * 表单提交与「点了联想里的某一条」走的都是这里，两条路不会走岔。
+   */
+  function runSearch(raw) {
+    syncDirty();          // 联想选中的词是直接写进输入框的，清空键得手动同步一次
+    const query = raw.trim();
+    if (!query) return;
 
-    const direct = toUrl(raw);
-    const target = direct ?? engines[index].url.replace('%s', encodeURIComponent(raw));
+    const direct = toUrl(query);
+    const target = direct ?? engines[index].url.replace('%s', encodeURIComponent(query));
 
-    // 用 window.open 而不是 location.href：这里一定是用户手势（表单提交），
+    // 用 window.open 而不是 location.href：这里一定是用户手势（表单提交 / 点候选项），
     // 浏览器不会当弹窗拦掉；走 location.href 则是把起始页本身导航走。
     // noopener 让新页面拿不到 window.opener。
     window.open(target, '_blank', 'noopener');
   }
 
-  form.addEventListener('submit', submit);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    runSearch(input.value);
+  });
 
   engineBtn.addEventListener('click', () => {
     if (!isPopoverOpen(menu)) renderMenu();   // 每次打开都重画，勾选状态永远是对的
     togglePopover(menu, { anchor: engineBtn, prefer: 'below-start' });
   });
+
+  /* 搜索词联想。接口地址、返回格式、去重与缓存全在 suggest.js 里，
+     这里只把输入框、表单和「怎么搜」接过去；关掉它的开关在设置里 */
+  const suggest = initSuggest({
+    input,
+    anchor: form,
+    panel: document.getElementById('searchSuggest'),
+    getEngine: () => engines[index],
+    isUrlLike: (value) => toUrl(value) !== null,   // 输入的是网址就不联想，用户要的是直接跳
+    onPick: runSearch,
+  });
+  suggest.setEnabled(cfg.search?.suggest !== false);
 
   // 按 / 快速聚焦搜索框。
   // 三种情况不能抢：焦点已经在别的输入框里、有浮层开着（Escape 也由浮层栈独占，
@@ -131,6 +151,7 @@ export function initSearch(cfg) {
   function clear() {
     input.value = '';
     syncDirty();
+    suggest.close();   // 输入都清空了，列表没有留着的道理
   }
 
   // 按下时就拦掉默认行为，别把焦点从输入框抢走 —— 否则点一下清空，光标就掉出去了
@@ -152,6 +173,7 @@ export function initSearch(cfg) {
     engines = next.search.engines;
     index = Math.max(0, engines.findIndex((e) => e.id === next.search.engineId));
     renderEngine();
+    suggest.setEnabled(next.search?.suggest !== false);
   });
 
   renderEngine();

@@ -20,14 +20,29 @@
 
     <div class="widget" data-widget="clock">
       <div class="widget__content">
-        <header class="clock">
-          <div class="clock__time" id="clockTime">--:--</div>
+        <!-- data-clock-style 决定字体与视觉风格（设置里可换），取值与观感见 style.css。
+             clock-face 是「时钟字形」那套共用的类，设置面板里的示例文字也用它。 -->
+        <header class="clock" data-clock-style="classic">
+          <div class="clock__time clock-face" id="clockTime">--:--</div>
           <div class="clock__meta">
             <span id="clockDate">　</span>
             <span class="clock__sep" aria-hidden="true">·</span>
             <span id="clockGreeting"></span>
           </div>
         </header>
+      </div>
+    </div>
+
+    <!-- 每日一言。默认落在左上角，和左下角的壁纸版权一上一下。
+         文字长短只影响它自己的宽度，不会推动别的组件。
+         它是页面上唯一不铺毛玻璃的组件 —— 就是几行小字，套一层玻璃卡片
+         反而比字本身更抢眼（观感全在 style.css 的 .quote 那几条里）。 -->
+    <div class="widget" data-widget="quote">
+      <div class="widget__content">
+        <figure class="quote">
+          <blockquote class="quote__text" id="quoteText"></blockquote>
+          <figcaption class="quote__from" id="quoteFrom"></figcaption>
+        </figure>
       </div>
     </div>
 
@@ -42,10 +57,14 @@
                     stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
+          <!-- aria-expanded / aria-activedescendant 由 suggest.js 写，
+               开和关成对写（只写一半会让读屏软件一直以为列表开着）。
+               这里没有 aria-haspopup，所以 popover.js 那条「顺手复位」管不到它 -->
           <input class="search__input" id="searchInput" type="text" name="q"
                  placeholder="搜索，或输入网址" spellcheck="false"
                  autocomplete="off" autocapitalize="off" autocorrect="off"
-                 aria-label="搜索关键词或网址">
+                 role="combobox" aria-autocomplete="list" aria-expanded="false"
+                 aria-controls="searchSuggest" aria-label="搜索关键词或网址">
           <div class="search__tail">
             <button class="search__clear" id="searchClear" type="button"
                     aria-label="清空" title="清空（Esc）">
@@ -59,6 +78,10 @@
         </form>
 
         <div class="popover glass" id="engineMenu" role="listbox" aria-label="选择搜索引擎"></div>
+
+        <!-- 搜索词联想。位置交给 popover.js，宽度在 suggest.js 里对齐搜索框 -->
+        <div class="popover glass search-suggest" id="searchSuggest"
+             role="listbox" aria-label="搜索建议"></div>
       </div>
     </div>
 
@@ -176,8 +199,21 @@
         </section>
 
         <section class="card">
+          <h3 class="card__title">时钟样式</h3>
+          <div class="card__list" id="clockChoices"></div>
+          <p class="card__hint">右侧的示例用的就是该样式真实的字体与观感。</p>
+        </section>
+
+        <section class="card">
+          <h3 class="card__title">每日一言</h3>
+          <div class="card__list" id="quoteChoices"></div>
+          <p class="card__hint" id="quoteHint"></p>
+        </section>
+
+        <section class="card">
           <h3 class="card__title">搜索引擎</h3>
           <div class="card__list" id="engineChoices"></div>
+          <p class="card__hint" id="searchSuggestHint"></p>
         </section>
 
         <section class="card">
