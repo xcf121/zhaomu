@@ -42,6 +42,8 @@
   `git checkout v1.0.0`
 - 打包：`python tools/package.py`，产物在 `dist/zhaomu-v<版本>.zip`，
   **manifest.json 在压缩包根目录**，解压即可装载
+- 发完跑一次 `python tools/check_release.py`：它把「工作区 / 提交 / tag / Release 资产」四处比一遍，
+  任何一处对不上就打印出具体差异和该跑的命令（完整发布顺序见 [AGENTS.md](AGENTS.md) 的「命令」）
 
 ## 技术说明
 

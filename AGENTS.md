@@ -38,6 +38,7 @@ PROJECT.md            目标 / MVP / 关键决策
 CHANGELOG.md          更新日志（一个版本一节）
 tools/make-icons.py   扩展图标生成脚本：**纯标准库手写 PNG**（zlib + struct），不引 Pillow
 tools/package.py      打包脚本：按 manifest 版本号打 dist/zhaomu-v<版本>.zip，manifest 在根
+tools/check_release.py 发布自检：比「工作区 / 提交 / tag / Release 资产」四处，对不上就非 0 退出
 dist/                 打包产物，**不进版本库**（已 gitignore），发布时传到 GitHub Release
 .preview/             测试壳页与截图的临时目录，**跑完即删**（已 gitignore）
 ```
@@ -64,7 +65,26 @@ python tools/make-icons.py
 
 ```
 python tools/package.py
+python tools/check_release.py   # 发完自检，见下
 ```
+
+**发一版的顺序别换**：
+
+1. 改 `src/manifest.json` 的版本号 → 在 `CHANGELOG.md` 顶部加一节 → 提交
+2. `python tools/package.py`
+3. `git tag -a v<版本> -m "…"` → `git push origin main` → `git push origin v<版本>`
+4. `gh release create v<版本> dist/zhaomu-v<版本>.zip`；补发已有的 Release 用
+   `gh release upload v<版本> dist/zhaomu-v<版本>.zip --clobber`
+5. `python tools/check_release.py` —— 四处全绿才算发完
+
+**`git push` 默认不推 tag**，于是「tag 挪过但没推」不报任何错：1.2.0 就中过一次 —— 本地 tag
+为了带上 `.gitattributes` 重打过，远端还指着旧提交，两边悄悄岔开。同一版还中过另一次 ——
+包在 23:16 重打了，Release 上的资产还是 22:38 传的旧包，12 个文本文件是 CRLF，差 298 字节。
+两样都不影响功能，坏掉的是「同样的源码打出来的包逐字节一致」这句话，而回退与验包全靠它。
+第 5 步的 `check_release.py` 就是为这两条写的：把对不上的具体条目和该跑的重传命令直接打出来。
+
+（**`v1.0.0` 是例外**：它的 tag 早于 `.gitattributes`，从那个 tag 重建、在 `autocrlf=true`
+的机器上仍然得到 CRLF，**不逐字节可复现**。资产保持原样没动，回退时按「功能一致」用。）
 
 打包前留神**换行符**：仓库里存的一律是 LF（`.gitattributes` 里 `* text=auto eol=lf`）。
 少了这一条，本机 `core.autocrlf=true` 会把文件检成 CRLF，`package.py` 打出来的 zip 就跟着
@@ -222,6 +242,9 @@ python tools/package.py
 
 **v1.2.0**（2026-10-08）。M1–M5 已在 1.0.0 上发布，M6（每日一言 + 时钟样式）与
 M7（一言换句 / 纯文字 + 搜索联想）是之后这两批。
+
+（2026-10-09 补：1.2.0 的 Release 资产重传过一次 —— 早先那份是 `.gitattributes` 之前打的、
+12 个文本文件带 CRLF。发布顺序与自检见「命令」一节。）
 
 M7 交付：
 

@@ -3,6 +3,12 @@
 版本号走 [语义化版本](https://semver.org/lang/zh-CN/)：`主.次.修订`。
 每个版本对应一个 git tag（`v1.0.0`）和一份 GitHub Release，Release 里附可直接安装的 zip。
 
+> **关于发布包的字节**：1.2.0 的 zip 在 2026-10-09 重传过一次 —— 早先那份是在
+> `.gitattributes` 之前打的，12 个文本文件是 CRLF，现在换成 LF 的（功能没有任何差别，
+> 只是从 tag 重建能逐字节对上了）。`v1.0.0` 的资产没动：它的 tag 早于 `.gitattributes`，
+> 从该 tag 重建在 `autocrlf=true` 的机器上仍然是 CRLF，不逐字节可复现。
+> 自检脚本见 `tools/check_release.py`。
+
 ## [1.2.0] - 2026-10-08
 
 三处调整：每日一言改成纯文字、改成每次开新标签页换一句，搜索框加上词联想；
